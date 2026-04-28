@@ -8,21 +8,65 @@ class KeyframeController:
         anim_curves = mc.listConnections(controller, t='animCurve')
         print(anim_curves)
         
-    def isAnimationCurveFlat(animCurve):
+    def isAnimationCurveFlat(self, animCurve):
         if not mc.objExists():
             raise ValueError(f"Object '{animCurve}' does not exist.")
 
-            values = mc.keyframe(anim_curve, query=True, valueChange=True)
-            if not values:
-                return True
+        values = mc.keyframe(animCurve, query=True, valueChange=True)
+        if not values:
+            return True
 
-            first_val = values[0]
-            return all(abs(v - first_val) < 1e-6 for v in values)
+        first_val = values[0]
+        return all(abs(v - first_val) < 1e-6 for v in values)
         
-    def deleteKeyAtCurrentTime(currentTime):
-         current_time = mc.currentTime(query=True)
-    mc.cutKey(time=(deleteKeyAtCurrentTime), clear=True)
-    print(f"Deleted keyframe(s) at frame: {deleteKeyAtCurrentTime}")
+    def deleteKeyAtCurrentTime(self, currentTime):
+        current_time = mc.currentTime(query=True)
+        mc.cutKey(time=(current_time), clear=True)
+        print(f"Deleted keyframe(s) at frame: {current_time}")
+
+    def deleteFlatKeyframe(self):
+        selection = mc.ls(sl=True)
+
+        if not selection:
+            mc.warning("Please select an object.")
+       
+    
+        obj = selection[0]
+        return
+        
+    obj = deleteFlatKeyframe(self = deleteFlatKeyframe)
+        
+    currentTime = mc.currentTime(q=True)
+    attrs = ['tx', 'ty', 'tz', 'rx', 'ry', 'rz', 'sx', 'sy', 'sz']
+    attrStatus = {}
+    for attr in attrs:
+        if not mc.listConnections(f"{obj}.{attr}", type='animCurve'):
+             continue
+        val_curr = mc.keyframe(obj, at=attr, q=True, t=(currentTime,), eval=True)[0]
+        
+       
+        prev_keys = mc.keyframe(obj, at=attr, q=True, t=(currentTime,), tcli=True, prev=True)
+        
+        next_keys = mc.keyframe(obj, at=attr, q=True, t=(currentTime,), tcli=True, next=True)
+        
+        if not prev_keys or not next_keys:
+            
+            attrStatus[attr] = False
+            continue
+            
+        val_prev = mc.keyframe(obj, at=attr, q=True, t=(prev_keys[0],), eval=True)[0]
+        val_next = mc.keyframe(obj, at=attr, q=True, t=(next_keys[0],), eval=True)[0]
+        
+        if abs(val_curr - val_prev) < 0.001 and abs(val_curr - val_next) < 0.001:
+            attrStatus[attr] = True
+        else:
+            attrStatus[attr] = False
+            
+    if all(attrStatus.values()) and len(attrStatus) > 0:
+        mc.cutKey(obj, t=(currentTime,), option="keys")
+        print(f"Keyframe removed on {obj} at frame {currentTime} (all channels flat).")
+    else:
+        print(f"Keyframe NOT removed on {obj} at frame {currentTime} (not all channels flat).")
 
     def Run():
          keyframeRemoverWidget = KeyframeRemoverWidget()
