@@ -54,12 +54,41 @@ class KeyframeController:
             mc.inViewMessage(amg="No flat keys found at current frame.", pos="midCenter", fade=True)
 
 
-    def getPreviousKeyframe(self):
-        return mc.findKeyframe(timeSlider=True, which="next")
+    def getPreviousKeyframe(self, frame):
+        return mc.findKeyframe(t=(f"{frame}pal",), which="previous")
             
 
-    def getNextKeyframe(self):
-        return mc.findKeyframe(timeSlider=True, which="next")
+    def getNextKeyframe(self, frame):
+        return mc.findKeyframe(t=(f"{frame+1}pal",), which="next")
+    
+    def deleteFlatKeyframeAtFrame(self, obj, frame):
+        attrs = ['tx', 'ty', 'tz', 'rx', 'ry', 'rz', 'sx', 'sy', 'sz', 'v']
+        attrStatus = {}
+        for attr in attrs:
+            if not mc.listConnections(f"{obj}.{attr}", type='animCurve'):
+                continue
+            val_curr = mc.keyframe(obj, at=attr, q=True, time=(frame,), eval=True)[0]
+                
+            val_prev = mc.keyframe(obj, at=attr, q=True, time=(self.getPreviousKeyframe(frame),), eval=True)[0]
+            val_next = mc.keyframe(obj, at=attr, q=True, time=(self.getNextKeyframe(frame),), eval=True)[0]
+            
+            if abs(val_curr - val_prev) < 0.001 and abs(val_curr - val_next) < 0.001:
+                attrStatus[attr] = True
+            else:
+                attrStatus[attr] = False
+                
+        if all(attrStatus.values()) and len(attrStatus) > 0:
+            mc.cutKey(obj, time=(frame,), option="keys")
+            print(f"Keyframe removed on {obj} at frame {frame} (all channels flat).")
+        else:
+            print(f"Keyframe NOT removed on {obj} at frame {frame} (not all channels flat).")
+
+    def GetKeyFrameNumbers(self, obj):
+        keys = mc.keyframe(obj, query=True, timeChange=True)
+        if not keys:
+            return []
+        keyNumbers = sorted(set(int(round(t)) for t in keys))
+        return keyNumbers
     
     def deleteFlatKeyframe(self):
         selection = mc.ls(sl=True)
@@ -70,27 +99,19 @@ class KeyframeController:
         obj = selection[0]
             
         currentTime = mc.currentTime(q=True)
-        attrs = ['tx', 'ty', 'tz', 'rx', 'ry', 'rz', 'sx', 'sy', 'sz']
-        attrStatus = {}
-        for attr in attrs:
-            if not mc.listConnections(f"{obj}.{attr}", type='animCurve'):
-                continue
-            val_curr = mc.keyframe(obj, at=attr, q=True, time=(currentTime,), eval=True)[0]
-                
-            val_prev = mc.keyframe(obj, at=attr, q=True, time=(self.getPreviousKeyframe(),), eval=True)[0]
-            val_next = mc.keyframe(obj, at=attr, q=True, time=(self.getNextKeyframe(),), eval=True)[0]
-            
-            if abs(val_curr - val_prev) < 0.001 and abs(val_curr - val_next) < 0.001:
-                attrStatus[attr] = True
-            else:
-                attrStatus[attr] = False
-                
-        if all(attrStatus.values()) and len(attrStatus) > 0:
-            mc.cutKey(obj, time=(currentTime,), option="keys")
-            print(f"Keyframe removed on {obj} at frame {currentTime} (all channels flat).")
-        else:
-            print(f"Keyframe NOT removed on {obj} at frame {currentTime} (not all channels flat).")
+        self.deleteFlatKeyframeAtFrame(obj, currentTime)
+        
+        
+    def deleteAllFlatKeyframes(self):
+        selection = mc.ls(sl=True)
 
+        if not selection:
+            mc.warning("Please select an object.")
+        for curve in selection:
+            keys = self.GetKeyFrameNumbers(curve)
+            for key in keys:
+                self.deleteFlatKeyframeAtFrame(curve, key)
+            
 
 class KeyframeRemoverWidget(MayaWidget):
     def __init__(self):
@@ -108,13 +129,22 @@ class KeyframeRemoverWidget(MayaWidget):
         self.nameKeyframeEdit = QLineEdit()
         self.infoLayout.addWidget(self.nameKeyframeEdit)
 
-        self.removeExcessKeyframesBtn = QPushButton("Remove Excess Keyframes")
+        self.removeExcessKeyframesBtn = QPushButton("Remove Excess Keyframes On One Frame")
         self.removeExcessKeyframesBtn.clicked.connect(self.removeExcessKeyframesBtnClicked)
+        self.infoLayout.addWidget(self.removeExcessKeyframesBtn)
+
+        self.removeExcessKeyframesBtn = QPushButton("Remove Excess Keyframes Across All the Animation")
+        self.removeExcessKeyframesBtn.clicked.connect(self.removeAllExcessKeyframesBtnClicked)
         self.infoLayout.addWidget(self.removeExcessKeyframesBtn)
 
     def removeExcessKeyframesBtnClicked(self):
         self.remover.deleteFlatKeyframe()
         print("Excess Keyframes Removed!")
+
+    def removeAllExcessKeyframesBtnClicked(self):
+        self.remover.deleteAllFlatKeyframes()
+        print("Excess Keyframes Removed Across All of the Animation!")
+
 
 
 def Run():
