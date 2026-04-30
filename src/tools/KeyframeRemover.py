@@ -20,59 +20,76 @@ class KeyframeController:
         return all(abs(v - first_val) < 1e-6 for v in values)
         
     def deleteKeyAtCurrentTime(self, currentTime):
-        current_time = mc.currentTime(query=True)
-        mc.cutKey(time=(current_time), clear=True)
-        print(f"Deleted keyframe(s) at frame: {current_time}")
+        currentTime = mc.currentTime(query=True)
+        mc.cutKey(time=(currentTime), clear=True)
 
+        currentFrame = mc.currentTime(query=True)
+        selection = mc.ls(selection=True)
+        print(f"Deleted keyframe(s) at frame: {currentTime}")
+
+        if not selection:
+            mc.warning("No objects selected.")
+            return 
+        deletedCount = 0
+
+        for obj in selection:
+            anim_curves = mc.listConnections(obj, type="animCurve") or []
+            for curve in anim_curves:
+                keyIndex = mc.keyframe(curve, query=True, time=(currentFrame, currentFrame), indexValue=True)
+                if not keyIndex:
+                    continue
+
+                idx = keyIndex[0]
+                prevVal = mc.keyframe(curve, query=True, index=(idx-1, idx-1), valueChange=True)
+                currVal = mc.keyframe(curve, query=True, index=(idx, idx), valueChange=True)
+                nextVal = mc.keyframe(curve, query=True, index=(idx+1, idx+1), valueChange=True)
+                if prevVal and nextVal and currVal:
+                    if abs(prevVal[0] - currVal[0]) < 1e-6 and abs(nextVal[0] - currVal[0]) < 1e-6:
+                        mc.cutKey(curve, time=(currentFrame, currentFrame))
+                        deletedCount += 1
+
+        if deletedCount:
+            mc.inViewMessage(amg=f"<hl>{deletedCount}</hl> flat key(s) deleted.", pos="midCenter", fade=True)
+        else:
+            mc.inViewMessage(amg="No flat keys found at current frame.", pos="midCenter", fade=True)
+
+
+    def getPreviousKeyframe(self):
+        return mc.findKeyframe(timeSlider=True, which="next")
+            
+
+    def getNextKeyframe(self):
+        return mc.findKeyframe(timeSlider=True, which="next")
+    
     def deleteFlatKeyframe(self):
         selection = mc.ls(sl=True)
 
         if not selection:
             mc.warning("Please select an object.")
        
-    
         obj = selection[0]
-        return
-        
-    obj = deleteFlatKeyframe(self = deleteFlatKeyframe)
-        
-    currentTime = mc.currentTime(q=True)
-    attrs = ['tx', 'ty', 'tz', 'rx', 'ry', 'rz', 'sx', 'sy', 'sz']
-    attrStatus = {}
-    for attr in attrs:
-        if not mc.listConnections(f"{obj}.{attr}", type='animCurve'):
-             continue
-        val_curr = mc.keyframe(obj, at=attr, q=True, t=(currentTime,), eval=True)[0]
-        
-       
-        prev_keys = mc.keyframe(obj, at=attr, q=True, t=(currentTime,), tcli=True, prev=True)
-        
-        next_keys = mc.keyframe(obj, at=attr, q=True, t=(currentTime,), tcli=True, next=True)
-        
-        if not prev_keys or not next_keys:
             
-            attrStatus[attr] = False
-            continue
+        currentTime = mc.currentTime(q=True)
+        attrs = ['tx', 'ty', 'tz', 'rx', 'ry', 'rz', 'sx', 'sy', 'sz']
+        attrStatus = {}
+        for attr in attrs:
+            if not mc.listConnections(f"{obj}.{attr}", type='animCurve'):
+                continue
+            val_curr = mc.keyframe(obj, at=attr, q=True, time=(currentTime,), eval=True)[0]
+                
+            val_prev = mc.keyframe(obj, at=attr, q=True, time=(self.getPreviousKeyframe(),), eval=True)[0]
+            val_next = mc.keyframe(obj, at=attr, q=True, time=(self.getNextKeyframe(),), eval=True)[0]
             
-        val_prev = mc.keyframe(obj, at=attr, q=True, t=(prev_keys[0],), eval=True)[0]
-        val_next = mc.keyframe(obj, at=attr, q=True, t=(next_keys[0],), eval=True)[0]
-        
-        if abs(val_curr - val_prev) < 0.001 and abs(val_curr - val_next) < 0.001:
-            attrStatus[attr] = True
+            if abs(val_curr - val_prev) < 0.001 and abs(val_curr - val_next) < 0.001:
+                attrStatus[attr] = True
+            else:
+                attrStatus[attr] = False
+                
+        if all(attrStatus.values()) and len(attrStatus) > 0:
+            mc.cutKey(obj, time=(currentTime,), option="keys")
+            print(f"Keyframe removed on {obj} at frame {currentTime} (all channels flat).")
         else:
-            attrStatus[attr] = False
-            
-    if all(attrStatus.values()) and len(attrStatus) > 0:
-        mc.cutKey(obj, t=(currentTime,), option="keys")
-        print(f"Keyframe removed on {obj} at frame {currentTime} (all channels flat).")
-    else:
-        print(f"Keyframe NOT removed on {obj} at frame {currentTime} (not all channels flat).")
-
-    def Run():
-         keyframeRemoverWidget = KeyframeRemoverWidget()
-         keyframeRemoverWidget.show()
-            
-    Run()
+            print(f"Keyframe NOT removed on {obj} at frame {currentTime} (not all channels flat).")
 
 
 class KeyframeRemoverWidget(MayaWidget):
@@ -96,14 +113,12 @@ class KeyframeRemoverWidget(MayaWidget):
         self.infoLayout.addWidget(self.removeExcessKeyframesBtn)
 
     def removeExcessKeyframesBtnClicked(self):
-                selected_objects = mc.ls(selection=True)   
-                if selected_objects:
-                    mc.cutKey(selected_objects, clear=True)
-                print("Excess Keyframes Removed!")
+        self.remover.deleteFlatKeyframe()
+        print("Excess Keyframes Removed!")
 
 
 def Run():
-    limbRiggerWidget = KeyframeRemoverWidget()
-    limbRiggerWidget.show()
+    keyframeRemoverWidget = KeyframeRemoverWidget()
+    keyframeRemoverWidget.show()
 
 Run()
