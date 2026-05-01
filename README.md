@@ -1,7 +1,11 @@
 # FINAL TD TOOL
 
 ## Tech Stack
-
+|Tool  | Version|
+|------|-------|
+|Python| 3.12  |
+|PySide|  6    |
+|Maya  |>=2025 |
 
 
 
