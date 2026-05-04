@@ -5,7 +5,7 @@
 |------|-------|
 |Python| 3.12  |
 |PySide|  6    |
-|Maya  |>=2026 |
+|Maya  |>=2025 |
 
 
 
@@ -18,6 +18,6 @@
 
 # Keyframe Remover
 
-<img assets = "KeyframeRemover.png">
+<img src="assets/KeyframeRemover.png">
 
 * Remove excess keyframes across either one frame or across the entire animation.
